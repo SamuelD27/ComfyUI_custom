@@ -1,1 +1,39 @@
-.idea
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Secrets - NEVER commit these
+SECRETS.local.md
+*.local.md
+.env
+.env.*
+secrets/
+credentials/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+ENV/
+.venv/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+*.log
+
+# Model files (too large for git)
+*.safetensors
+*.ckpt
+*.pt
+*.pth
+*.bin
+*.gguf

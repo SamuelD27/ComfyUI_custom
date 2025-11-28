@@ -19,13 +19,57 @@ fi
 # Move ai-toolkit's folder to $VOLUME so models and all config will persist
 /ai-toolkit-on-workspace.sh
 
-#!/bin/bash
 if [[ -z "${HF_TOKEN}" ]] || [[ "${HF_TOKEN}" == "enter_your_huggingface_token_here" ]]
 then
     echo "HF_TOKEN is not set"
 else
     echo "HF_TOKEN is set, logging in..."
-    hf auth login --token ${HF_TOKEN}
+    huggingface-cli login --token ${HF_TOKEN}
+fi
+
+# Sync models from R2 bucket
+sync_models_from_r2() {
+    echo "Syncing models from R2 bucket..."
+
+    # Ensure required environment variables are set
+    if [[ -z "${R2_ENDPOINT}" ]] || [[ -z "${R2_ACCESS_KEY_ID}" ]] || [[ -z "${R2_SECRET_ACCESS_KEY}" ]]; then
+        echo "WARNING: R2 credentials not set. Skipping model sync."
+        echo "Set R2_ENDPOINT, R2_ACCESS_KEY_ID, and R2_SECRET_ACCESS_KEY environment variables."
+        return 1
+    fi
+
+    # Configure rclone for R2
+    mkdir -p ~/.config/rclone
+    cat > ~/.config/rclone/rclone.conf << EOF
+[r2]
+type = s3
+provider = Cloudflare
+access_key_id = ${R2_ACCESS_KEY_ID}
+secret_access_key = ${R2_SECRET_ACCESS_KEY}
+endpoint = ${R2_ENDPOINT}
+acl = private
+EOF
+
+    # Sync models from R2 to ComfyUI models directory
+    # Uses --ignore-existing to skip files that already exist locally
+    echo "Syncing models from r2:comfyui-models/ to /workspace/ComfyUI/models/"
+    rclone sync r2:comfyui-models/ /workspace/ComfyUI/models/ \
+        --ignore-existing \
+        --progress \
+        --transfers 4 \
+        --checkers 8 \
+        --log-level INFO
+
+    if [ $? -eq 0 ]; then
+        echo "Model sync completed successfully"
+    else
+        echo "WARNING: Model sync encountered errors"
+    fi
+}
+
+# Sync models from R2 if SYNC_MODELS is set to true
+if [[ "${SYNC_MODELS}" == "true" ]]; then
+    sync_models_from_r2
 fi
 
 # Start AI-Toolkit UI in the background (prebuilt artifacts preferred)

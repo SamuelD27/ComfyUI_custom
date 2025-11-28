@@ -10,8 +10,11 @@ bash /update_Workflows.sh
 # But can be enabled if needed by commenting out the following line.
 bash /disable_mixlab.sh
 
-# Launch the UI
-python3 /workspace/ComfyUI/main.py --listen
+# Activate the virtual environment if it exists
+if [ -d "/workspace/venv" ]; then
+    source /workspace/venv/bin/activate
+fi
 
-# Keep the container running indefinitely
-sleep infinity
+# Launch ComfyUI on port 8080
+echo "Starting ComfyUI on port 8080..."
+python3 /workspace/ComfyUI/main.py --listen --port 8080
