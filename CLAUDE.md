@@ -1,238 +1,191 @@
-# CLAUDE.md - Project Guide for AI Assistants
+# ComfyUI Custom Project - Claude Code Context
 
 ## Project Overview
 
-This is a **fork of [ValyrianTech/ComfyUI_with_Flux](https://github.com/ValyrianTech/ComfyUI_with_Flux)** customized for Runpod.io deployment with network volumes. It includes:
-- Pre-configured ComfyUI with custom nodes (ComfyUI Manager, IPAdapter, ControlNet, etc.)
-- AI-Toolkit for LoRA training
-- Model syncing from Cloudflare R2 storage (custom addition)
-- 32+ pre-configured workflows
+This is a customized ComfyUI setup for Flux.1-dev image generation, running on RunPod with a persistent network volume. The project is based on ValyrianTech's ComfyUI_with_Flux template but has been customized for specific workflows.
 
-**Primary Language**: Bash, Python
-**License**: MIT (Valyrian Tech 2024)
-**Repository**: https://github.com/SamuelD27/ComfyUI_custom
+## Infrastructure
 
-## Secrets
+### RunPod Setup
+- **Network Volume ID**: `6mojc04f9w` (US-KS-2 datacenter)
+- **Volume Size**: 150GB
+- **Preferred GPU**: RTX PRO 6000 (96GB VRAM) or RTX A6000 (48GB)
+- **Docker Image**: `runpod/pytorch:2.4.0-py3.11-cuda12.4.1-devel-ubuntu22.04`
+- **Required Ports**: `8188/http` (ComfyUI), `8888/http` (JupyterLab), `22/tcp` (SSH)
 
-**API keys and secrets are stored in `SECRETS.local.md`** (gitignored, local only).
+### Cloudflare R2 Storage
+Models are backed up to R2 for persistence across pod recreations.
+- **Bucket**: `comfyui-models`
+- **Endpoint**: Configured in `.secrets` file
 
-If this file doesn't exist, create it from the template and add your keys:
-- Runpod API Key
-- Cloudflare R2 credentials
-- HuggingFace token
+### Credentials Location
+All API keys and secrets are stored in `.secrets` (gitignored):
+- `RUNPOD_API_KEY`
+- `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_ENDPOINT`
 
-## Git Workflow for Claude Code Sessions
+## Network Volume Structure
 
-**IMPORTANT**: Every Claude Code session creates a new worktree/branch. To keep changes synchronized:
+```
+/workspace/
+├── ComfyUI/
+│   ├── models/
+│   │   ├── checkpoints/      # Base models (flux1-dev.safetensors - 23GB)
+│   │   ├── clip/             # CLIP models (clip_l, t5xxl_fp8)
+│   │   ├── clip_vision/      # CLIP vision models (sigclip)
+│   │   ├── controlnet/       # ControlNet models (union, upscaler)
+│   │   ├── ipadapter/        # IP-Adapter models
+│   │   ├── ipadapter-flux/   # Flux-specific IP-Adapter (ip-adapter.bin)
+│   │   ├── loras/            # LoRA models
+│   │   ├── pulid/            # PuLID face models
+│   │   ├── unet/             # UNet/diffusion models
+│   │   ├── upscale_models/   # Upscalers (4x-UltraSharp)
+│   │   └── vae/              # VAE models (ae.safetensors)
+│   ├── custom_nodes/         # ComfyUI extensions
+│   └── user/default/workflows/  # Saved workflows (.json)
+├── comfyui.log               # ComfyUI server log
+└── download.log              # Model download log
+```
 
-### At the START of a new session:
+## Installed Models
+
+### Base Model
+- `flux1-dev.safetensors` (23GB) - in `/models/checkpoints/`
+
+### CLIP/Text Encoders
+- `clip_l.safetensors` (235MB)
+- `t5xxl_fp8_e4m3fn.safetensors` (4.6GB)
+
+### ControlNet
+- `flux_controlnet_union_instantx.safetensors` (6.2GB)
+- `flux_controlnet_union_pro_2.0.safetensors` (4GB)
+- `flux_controlnet_upscaler_jasperai.safetensors` (3.4GB)
+
+### IP-Adapter
+- `ip-adapter.bin` (5GB) - in `/models/ipadapter-flux/`
+- `sigclip_vision_patch14_384/` - CLIP vision model directory
+
+### LoRAs
+- `GracePenelopeTargaryenV5.safetensors` (165MB)
+- `VideoAditor_flux_realism_lora.safetensors` (22MB)
+- `Xlabs-AI_flux-RealismLora.safetensors` (22MB)
+- Custom training LoRAs (my_first_lora_v1, v2)
+
+### Other
+- VAE: `ae.safetensors` (320MB)
+- Upscaler: `4x-UltraSharp.pth` (64MB)
+- PuLID: `pulid_flux_v0.9.1.safetensors`, `EVA02_CLIP_L_336_psz14_s6B.pt`
+
+## Custom Nodes Installed
+
+### Working
+- **ComfyUI-Manager** - Node manager (requires `pip install gitpython`)
+- **ComfyUI-IPAdapter-Flux** - Flux IP-Adapter support (Shakker-Labs)
+- **ComfyUI_IPAdapter_plus** - General IP-Adapter
+- **ComfyUI-FluxTrainer** - LoRA training in ComfyUI (kijai)
+- **ComfyUI_Flux_Lora_Merger** - Merge Flux LoRAs
+- **ComfyUI_essentials** - Essential utility nodes
+- **rgthree-comfy** - QoL improvements
+- **ComfyUI-Custom-Scripts** - Utility scripts
+- **sd-dynamic-thresholding** - CFG improvements
+
+### May Need Dependencies
+These nodes may fail to import without additional pip packages:
+- `comfyui_controlnet_aux` - needs `opencv-python`
+- `ComfyUI-VideoHelperSuite` - needs `opencv-python`, `imageio-ffmpeg`
+- `ComfyUI-KJNodes` - needs various packages
+- `was-node-suite-comfyui` - needs various packages
+- `ComfyUI-GGUF` - GGUF model support
+
+## Common Operations
+
+### Create a New Pod
 ```bash
-# Sync with remote first
-git fetch origin
-git merge origin/main
+# Read API key from .secrets
+source .secrets
+
+# Create pod via GraphQL API
+curl -X POST "https://api.runpod.io/graphql" \
+  -H "Authorization: Bearer $RUNPOD_API_KEY" \
+  -d '{"query": "mutation { podFindAndDeployOnDemand(input: {
+    gpuTypeId: \"NVIDIA RTX PRO 6000 Blackwell Server Edition\",
+    volumeInGb: 150,
+    networkVolumeId: \"6mojc04f9w\",
+    ports: \"8188/http,8888/http,22/tcp\",
+    imageName: \"runpod/pytorch:2.4.0-py3.11-cuda12.4.1-devel-ubuntu22.04\",
+    volumeMountPath: \"/workspace\",
+    startSsh: true
+  }) { id } }"}'
 ```
 
-### At the END of a session (before closing):
+### SSH to Pod
 ```bash
-# Commit and push changes to remote
-git add -A
-git commit -m "Description of changes"
-git push origin HEAD:main
+ssh root@<IP> -p <PORT> -i ~/.ssh/id_ed25519
 ```
 
-### Quick sync command (run at session start):
+### Start ComfyUI
 ```bash
-git fetch origin && git merge origin/main --no-edit
+cd /workspace/ComfyUI
+pip install -r requirements.txt
+nohup python main.py --listen 0.0.0.0 --port 8188 > /workspace/comfyui.log 2>&1 &
 ```
 
-This ensures all worktrees stay synchronized through the remote repository.
-
-## Current Infrastructure Status
-
-**Network Volume**: Created in CA-MTL-1 datacenter (check via API for current ID)
-- Size: 100GB
-- Name: comfyui-volume
-
-**Pod Requirements**:
-- GPU: A40 recommended ($0.35/hr, 48GB VRAM, medium availability in CA-MTL-1)
-- Alternative: RTX A5000 ($0.16/hr, 24GB VRAM) if available
-- Ports: `8080/http,8888/http,22/tcp`
-- Image: `runpod/pytorch:2.4.0-py3.11-cuda12.4.1-devel-ubuntu22.04`
-- **CRITICAL**: Set `volumeInGb: 100` to use full network volume (not default 20GB)
-
-## Directory Structure
-
-```
-├── comfyui-with-flux/            # Docker config with Flux models included
-│   ├── Dockerfile
-│   └── flux/                     # Flux model files (.gitkeep)
-├── comfyui-without-flux/         # Docker config without large models
-│   ├── Dockerfile                # Main Docker build file
-│   ├── start-ssh-only.sh         # Main startup script (R2 sync + services)
-│   ├── start-original.sh         # User-customizable startup script
-│   ├── comfyui-on-workspace.sh   # Persists ComfyUI to /workspace
-│   ├── ai-toolkit-on-workspace.sh # Persists AI-Toolkit to /workspace
-│   ├── download_*.sh             # Model download scripts (HuggingFace)
-│   ├── workflows/                # 32+ pre-configured JSON workflows
-│   ├── ai-toolkit/               # LoRA training toolkit
-│   └── nginx config files        # Reverse proxy setup
-├── examples/                     # API usage examples (Python)
-├── build_docker.py               # Docker build script
-├── SECRETS.local.md              # Local secrets (gitignored)
-└── README.md                     # Documentation
-```
-
-## Custom Modifications (vs upstream)
-
-1. **R2 Model Sync** (`start-ssh-only.sh`): Added rclone sync from Cloudflare R2 bucket
-2. **Port 8080** (`start-original.sh`): ComfyUI runs on port 8080 for Runpod HTTP proxy
-3. **Venv Activation**: Scripts activate `/workspace/venv` if present
-
-## Model Storage (R2 Bucket)
-
-Models are stored in Cloudflare R2 bucket `comfyui-models/` with this structure:
-```
-s3://comfyui-models/
-├── clip/
-├── clip_vision/
-├── controlnet/
-├── diffusion_models/
-├── embeddings/
-├── ipadapter/
-├── loras/
-├── pulid/
-├── text_encoders/
-├── upscale_models/
-└── vae/
-```
-
-## Environment Variables
-
-### Required for R2 Model Sync
-- `R2_ENDPOINT`: Cloudflare R2 endpoint URL
-- `R2_ACCESS_KEY_ID`: R2 access key ID
-- `R2_SECRET_ACCESS_KEY`: R2 secret access key
-- `SYNC_MODELS`: Set to `true` to sync models from R2 on startup
-
-### HuggingFace Downloads (alternative to R2)
-- `HF_TOKEN`: HuggingFace token for gated models
-- `DOWNLOAD_WAN`: Set to `true` to download Wan 2.1 models
-- `DOWNLOAD_FLUX`: Set to `true` to download Flux models
-
-### Optional
-- `PUBLIC_KEY`: SSH public key for pod access
-- `AI_TOOLKIT_AUTH`: Password for AI-Toolkit UI (default: 'changeme')
-
-## Runpod Setup
-
-### Pod Configuration
-1. Use the `comfyui-without-flux` Docker image
-2. Attach a network volume to `/workspace`
-3. **Expose HTTP port 8080** in pod settings
-4. Set environment variables for R2 or HuggingFace
-
-### Access URLs
-- ComfyUI: `https://[POD_ID]-8080.proxy.runpod.net`
-- JupyterLab: `https://[POD_ID]-8888.proxy.runpod.net`
-- AI-Toolkit: `https://[POD_ID]-8675.proxy.runpod.net`
-
-## Key Commands
-
-### Sync Models from R2 (inside container)
-The startup script automatically syncs models when `SYNC_MODELS=true`. To manually sync:
+### Configure rclone for R2
 ```bash
-rclone sync r2:comfyui-models/ /workspace/ComfyUI/models/ --progress
+mkdir -p ~/.config/rclone
+cat > ~/.config/rclone/rclone.conf << 'EOF'
+[r2]
+type = s3
+provider = Cloudflare
+access_key_id = <from .secrets>
+secret_access_key = <from .secrets>
+endpoint = <from .secrets>
+acl = private
+EOF
 ```
 
-### LoRA Training
+### Sync Models from R2
 ```bash
-cd /workspace/ai-toolkit
-python3 flux_train_ui.py                    # UI-based training
-python3 run.py config/train_lora.yaml       # Command-line training
-python3 caption_images.py /workspace/training_set "A photo of X."  # Auto-caption
+rclone copy r2:comfyui-models/diffusion_models/flux1-dev.safetensors /workspace/ComfyUI/models/checkpoints/
 ```
 
-## Architecture
-
-### Service Ports
-- **8080**: ComfyUI Web UI (custom, for Runpod proxy)
-- **8888**: JupyterLab (file management)
-- **7860**: Gradio Apps
-- **8675**: AI-Toolkit UI
-
-### Persistent Volume Strategy
-- Uses `/workspace` for data persistence across pod restarts
-- Scripts move app directories to `/workspace` and symlink back
-- Models synced from R2 are cached locally in `/workspace/ComfyUI/models/`
-
-## Important Files
-
-| File | Purpose |
-|------|---------|
-| `start-ssh-only.sh` | Main startup script with R2 sync |
-| `start-original.sh` | User-customizable startup (copied to /workspace) |
-| `comfyui-on-workspace.sh` | Moves ComfyUI to /workspace for persistence |
-| `ai-toolkit-on-workspace.sh` | Moves AI-Toolkit to /workspace for persistence |
-| `Dockerfile` | Docker image build configuration |
-| `download_*.sh` | Model download scripts (HuggingFace alternative) |
-| `ai-toolkit/train_lora.yaml` | LoRA training config template |
-| `examples/api_example.py` | Python API client example |
-| `SECRETS.local.md` | Local secrets file (gitignored) |
-
-## Workflow Files
-
-32+ pre-configured workflows in `comfyui-without-flux/workflows/`:
-- txt2img, img2img, LoRa
-- ControlNet, Inpainting, Outpainting
-- Wan 2.1/2.2 Text2Video, Image2Video
-- CogVideoX, AdvancedLivePortrait
-- FaceSwap, Upscale (LDSR, SUPIR)
-- VibeVoice (single/multiple speaker)
-- Flux2 Text2Image, ImageEdit
-
-## Custom Nodes to Install
-
-These custom nodes should be cloned to `/workspace/ComfyUI/custom_nodes/`:
-
-| Node | Repository | Purpose |
-|------|------------|---------|
-| ComfyUI-Manager | `ltdrdata/ComfyUI-Manager` | Node management, model downloads |
-| x-flux-comfyui | `XLabs-AI/x-flux-comfyui` | XLabs IPAdapter + ControlNet for Flux |
-| ComfyUI-IPAdapter-Flux | `Shakker-Labs/ComfyUI-IPAdapter-Flux` | Shakker-Labs/InstantX IPAdapter for Flux |
-| ComfyUI-Impact-Pack | `ltdrdata/ComfyUI-Impact-Pack` | Detailer, Upscaler, SAM integration |
-| comfyui_controlnet_aux | `Fannovel16/comfyui_controlnet_aux` | ControlNet preprocessors |
-| ComfyUI-GGUF | `city96/ComfyUI-GGUF` | Quantized model support (GGUF) |
-| rgthree-comfy | `rgthree/rgthree-comfy` | Power LoRA Loader, utilities |
-| ComfyUI-PuLID-Flux | `balazik/ComfyUI-PuLID-Flux` | Face swap/identity preservation for Flux |
-| efficiency-nodes-comfyui | `jags111/efficiency-nodes-comfyui` | Batch processing utilities |
-| ComfyUI-KJNodes | `kijai/ComfyUI-KJNodes` | Various useful utilities |
-
-## Setup Commands Reference
-
-See `SECRETS.local.md` for commands with API keys filled in.
-
-### Check Network Volume via API
+### Upload Models to R2
 ```bash
-curl -s -X POST "https://api.runpod.io/graphql" \
-  -H "Authorization: Bearer YOUR_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"query": "query { myself { networkVolumes { id name size dataCenterId } } }"}'
+rclone copy /workspace/ComfyUI/models/<folder>/<file> r2:comfyui-models/<folder>/
 ```
 
-### Create Pod via GraphQL (IMPORTANT: volumeInGb must match network volume size)
-```bash
-curl -s -X POST "https://api.runpod.io/graphql" \
-  -H "Authorization: Bearer YOUR_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "query": "mutation { podFindAndDeployOnDemand(input: { name: \"comfyui-setup\", imageName: \"runpod/pytorch:2.4.0-py3.11-cuda12.4.1-devel-ubuntu22.04\", gpuTypeId: \"NVIDIA A40\", gpuCount: 1, volumeInGb: 100, containerDiskInGb: 30, networkVolumeId: \"VOLUME_ID_HERE\", ports: \"8080/http,8888/http,22/tcp\", dataCenterId: \"CA-MTL-1\", startSsh: true }) { id name } }"
-  }'
+## Workflows
+
+Workflows are stored in `/workspace/ComfyUI/user/default/workflows/`:
+- `Test.json` - Basic test workflow
+- `Controlnet-test.json` - ControlNet workflow
+- `training.json` - LoRA training workflow
+
+## R2 Bucket Contents
+
+The `comfyui-models` bucket contains backups of all models:
+```
+clip/
+clip_vision/
+controlnet/
+diffusion_models/    # flux1-dev.safetensors, flux1-kontext-dev.safetensors
+ipadapter/
+loras/
+pulid/
+upscale_models/
+vae/
 ```
 
-### Check Pod Status
-```bash
-curl -s -X POST "https://api.runpod.io/graphql" \
-  -H "Authorization: Bearer YOUR_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"query": "query { pod(input: {podId: \"POD_ID_HERE\"}) { id name desiredStatus runtime { uptimeInSeconds ports { ip isIpPublic privatePort publicPort type } } } }"}'
-```
+## Notes
+
+1. **Flux1-dev location**: The model works in `/models/checkpoints/` for standard checkpoint loading, OR in `/models/unet/` for UNet-only loading. Currently placed in checkpoints.
+
+2. **IP-Adapter for Flux**: Requires `ComfyUI-IPAdapter-Flux` node and models in `/models/ipadapter-flux/` (not regular ipadapter folder).
+
+3. **CLIP Vision for Flux IP-Adapter**: Needs full `siglip-so400m-patch14-384` model directory in `/models/clip_vision/`.
+
+4. **Pod termination**: Network volume persists, but ComfyUI process stops. Need to restart ComfyUI on new pod.
+
+5. **Missing dependencies**: Some custom nodes fail on fresh pods. Install with:
+   ```bash
+   pip install opencv-python gitpython imageio-ffmpeg
+   ```
