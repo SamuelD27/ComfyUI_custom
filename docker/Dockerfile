@@ -23,8 +23,8 @@ FROM ${BASE_IMAGE} AS base
 
 # Build arguments
 ARG COMFYUI_VERSION=latest
-ARG PYTORCH_VERSION=2.2.0
-ARG CUDA_VERSION=cu121
+ARG PYTORCH_VERSION=2.5.1
+ARG CUDA_VERSION=cu124
 
 # Prevent interactive prompts
 ENV DEBIAN_FRONTEND=noninteractive
