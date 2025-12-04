@@ -1,0 +1,82 @@
+# ComfyUI + Flux Enhanced Dependencies
+# =====================================
+# These are pinned versions for maximum compatibility with Flux models,
+# IP-Adapter, PuLID, and other advanced nodes.
+#
+# IMPORTANT: Install in order - NumPy must be installed first!
+# pip install numpy==1.26.4 && pip install -r requirements_flux.txt
+
+# =============================================================================
+# Core Dependencies (Critical Versions)
+# =============================================================================
+
+# NumPy - MUST be < 2.0 for InsightFace and many IPAdapter nodes
+# Install this FIRST before other packages
+numpy==1.26.4
+
+# ONNX Runtime - Required for IP-Adapter Flux
+# Use GPU version if available, fallback to CPU
+onnxruntime-gpu==1.17.3
+
+# OpenCV - Compatible with NumPy 1.26
+opencv-contrib-python==4.9.0.80
+
+# Pillow - Image processing
+pillow>=10.0.0,<11.0.0
+
+# =============================================================================
+# InsightFace (Optional - for PuLID)
+# =============================================================================
+# Only install if using PuLID face identity features
+# Requires numpy<2.0
+
+insightface==0.7.3
+
+# =============================================================================
+# Additional Dependencies for Flux Workflows
+# =============================================================================
+
+# For IP-Adapter and vision models
+transformers>=4.36.0,<4.50.0
+accelerate>=0.25.0
+
+# Image processing
+albumentations>=1.3.1,<2.0.0
+imageio>=2.31.0
+imageio-ffmpeg>=0.4.8
+
+# Utilities
+tqdm>=4.65.0
+requests>=2.31.0
+safetensors>=0.4.0
+einops>=0.7.0
+
+# ControlNet preprocessing
+controlnet-aux>=0.0.7
+
+# Segmentation
+segment-anything>=1.0
+
+# =============================================================================
+# Video Processing (Optional)
+# =============================================================================
+# For video workflows (CogVideoX, Wan2.x, etc.)
+
+moviepy>=1.0.3
+av>=10.0.0
+
+# =============================================================================
+# Audio Processing (Optional)
+# =============================================================================
+# For VibeVoice and audio workflows
+
+librosa>=0.10.0
+soundfile>=0.12.0
+
+# =============================================================================
+# Development/Debugging (Optional)
+# =============================================================================
+
+# Uncomment for debugging
+# debugpy>=1.8.0
+# pytest>=7.4.0

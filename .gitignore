@@ -10,6 +10,7 @@ SECRETS.local.md
 *.local.md
 .env
 .env.*
+.secrets
 secrets/
 credentials/
 

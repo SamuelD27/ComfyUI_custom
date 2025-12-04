@@ -1,0 +1,49 @@
+# Git
+.git
+.gitignore
+
+# Development/IDE
+.claude
+.vscode
+*.pyc
+__pycache__
+*.egg-info
+.eggs
+*.egg
+
+# Documentation images
+*.png
+*.jpg
+*.jpeg
+
+# Secrets - never include in image
+.secrets
+.env
+*.env
+.env.template
+
+# Legacy infrastructure
+legacy/
+
+# Docker build scripts (not needed in container)
+docker/
+
+# Reference implementation (not needed in build)
+runpod-worker-reference/
+
+# Analysis and docs
+ANALYSIS.md
+IMPLEMENTATION_SUMMARY.md
+README.md
+README_short.md
+CLAUDE.md
+CHANGELOG.md
+
+# License (not needed in container)
+LICENSE
+
+# Examples directory (not needed in container)
+examples/
+
+# macOS
+.DS_Store

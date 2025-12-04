@@ -1,0 +1,18 @@
+# =============================================================================
+# ComfyUI Serverless Worker - Python Dependencies
+# =============================================================================
+# Aligned with official runpod-workers/worker-comfyui
+# =============================================================================
+
+# RunPod Serverless SDK
+runpod~=1.7.12
+
+# WebSocket client for real-time execution monitoring
+websocket-client
+
+# HTTP client for ComfyUI API communication
+requests
+
+# Note: The following are installed in the Docker image via ComfyUI's requirements:
+# - torch, torchvision, torchaudio (with CUDA)
+# - numpy, pillow, opencv-python, etc.
