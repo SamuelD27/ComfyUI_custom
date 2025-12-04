@@ -9,6 +9,40 @@ set -e
 
 echo "worker-comfyui: Starting ComfyUI"
 
+# =============================================================================
+# Model Download (if network volume is mounted and models are missing)
+# =============================================================================
+NETWORK_VOLUME="/runpod-volume"
+MODELS_DIR="${NETWORK_VOLUME}/models"
+
+download_model_if_missing() {
+    local url=$1
+    local dest=$2
+    local name=$(basename "$dest")
+
+    if [[ -f "$dest" ]]; then
+        echo "worker-comfyui: Model exists: $name"
+    else
+        echo "worker-comfyui: Downloading $name..."
+        mkdir -p "$(dirname "$dest")"
+        wget -q --show-progress -O "$dest" "$url" || {
+            echo "worker-comfyui: Failed to download $name"
+            rm -f "$dest"
+        }
+    fi
+}
+
+if [[ -d "$NETWORK_VOLUME" ]] && [[ "${DOWNLOAD_MODELS:-true}" == "true" ]]; then
+    echo "worker-comfyui: Network volume detected at $NETWORK_VOLUME"
+
+    # Download Flux FP8 checkpoint (smallest, ~17GB)
+    download_model_if_missing \
+        "https://huggingface.co/Comfy-Org/flux1-dev/resolve/main/flux1-dev-fp8.safetensors" \
+        "${MODELS_DIR}/checkpoints/flux1-dev-fp8.safetensors"
+
+    echo "worker-comfyui: Model setup complete"
+fi
+
 # Allow operators to tweak verbosity; default is DEBUG
 : "${COMFY_LOG_LEVEL:=DEBUG}"
 
